@@ -59,6 +59,15 @@ class DiscordBot(commands.Bot):
         except Exception as e:
             logger.error(f"Failed to setup Discord log handler: {e}")
 
+        # Setup music control panel
+        try:
+            music_cog = self.get_cog('MusicCog')
+            if music_cog and Config.MUSIC_CHANNEL_ID:
+                await music_cog.setup_control_panel()
+                logger.info("Music control panel setup complete")
+        except Exception as e:
+            logger.error(f"Failed to setup music control panel: {e}")
+
         # Set bot status
         await self.change_presence(
             activity=discord.Activity(

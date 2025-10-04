@@ -189,6 +189,7 @@ class MusicPlayer:
         self.loop = False
         self.volume = 0.5
         self.text_channel = None
+        self.control_thread = None  # Store thread reference
 
     def is_playing(self) -> bool:
         """Check if audio is currently playing"""
@@ -218,7 +219,14 @@ class MusicPlayer:
                 if self.current.thumbnail:
                     embed.set_thumbnail(url=self.current.thumbnail)
 
-                if self.text_channel:
+                # Send to control thread if available, otherwise main channel
+                if self.control_thread:
+                    try:
+                        await self.control_thread.send(embed=embed)
+                    except:
+                        if self.text_channel:
+                            await self.text_channel.send(embed=embed)
+                elif self.text_channel:
                     await self.text_channel.send(embed=embed)
 
             except Exception as e:
@@ -247,6 +255,11 @@ class MusicPlayer:
             'no_warnings': True,
             'extract_flat': False,
             'noplaylist': False,
+            'nocheckcertificate': True,
+            'ignoreerrors': False,
+            'logtostderr': False,
+            'no_color': True,
+            'source_address': '0.0.0.0',
         }
 
         with yt_dlp.YoutubeDL(ytdl_opts) as ytdl:
@@ -287,10 +300,6 @@ class MusicCog(commands.Cog):
         """Called when cog is loaded"""
         # Add persistent view
         self.bot.add_view(MusicControlView(self))
-
-        # Setup control panel if music channel is configured
-        if Config.MUSIC_CHANNEL_ID:
-            await self.setup_control_panel()
 
     async def setup_control_panel(self):
         """Setup the music control panel in the dedicated channel"""
@@ -448,10 +457,15 @@ class MusicCog(commands.Cog):
             await interaction.response.send_message("❌ You need to be in a voice channel!", ephemeral=True)
             return
 
-        await interaction.response.defer()
+        await interaction.response.defer(ephemeral=True)
 
         player = self.get_player(interaction.guild.id)
         player.text_channel = interaction.channel
+
+        # Set control thread reference if available
+        music_cog = interaction.client.get_cog('MusicCog')
+        if music_cog and hasattr(music_cog, 'control_panel_message'):
+            player.control_thread = music_cog.control_panel_message
 
         if not player.voice_client:
             player.voice_client = await interaction.user.voice.channel.connect()
@@ -463,33 +477,27 @@ class MusicCog(commands.Cog):
                 for song in songs:
                     player.queue.append(song)
 
-                embed = discord.Embed(
-                    title="✅ Added to Queue",
-                    description=f"Added **{len(songs)}** songs from Spotify",
-                    color=discord.Color.green()
+                # Ephemeral response
+                await interaction.followup.send(
+                    f"✅ Added **{len(songs)}** songs from Spotify to queue",
+                    ephemeral=True
                 )
-                await interaction.followup.send(embed=embed)
 
             else:
                 song = await self.extract_info(query, interaction.user)
                 player.queue.append(song)
 
-                embed = discord.Embed(
-                    title="✅ Added to Queue",
-                    description=f"**[{song.title}]({song.url})**",
-                    color=discord.Color.green()
+                # Ephemeral response
+                await interaction.followup.send(
+                    f"✅ Added **{song.title}** to queue (Position: {len(player.queue)})",
+                    ephemeral=True
                 )
-                embed.add_field(name="Duration", value=song.format_duration())
-                embed.add_field(name="Position in Queue", value=str(len(player.queue)))
-                if song.thumbnail:
-                    embed.set_thumbnail(url=song.thumbnail)
-                await interaction.followup.send(embed=embed)
 
             if not player.is_playing():
                 await player.play_next()
 
         except Exception as e:
-            await interaction.followup.send(f"❌ Error: {str(e)}")
+            await interaction.followup.send(f"❌ Error: {str(e)}", ephemeral=True)
 
     @app_commands.command(name='volume', description='Set volume (0-100)')
     @app_commands.describe(volume='Volume level from 0 to 100')
