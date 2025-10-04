@@ -60,12 +60,15 @@ class DiscordLogHandler(logging.Handler):
             print(f"Error sending log to Discord: {e}")
 
 
-def setup_logger(bot, name: str = "discord_bot") -> logging.Logger:
-    """Setup and configure logger with Discord handler"""
+def setup_logger(name: str = "discord_bot") -> logging.Logger:
+    """Setup and configure logger with console handler only"""
 
     # Create logger
     logger = logging.getLogger(name)
     logger.setLevel(logging.DEBUG)
+
+    # Remove any existing handlers
+    logger.handlers.clear()
 
     # Console handler
     console_handler = logging.StreamHandler()
@@ -76,9 +79,6 @@ def setup_logger(bot, name: str = "discord_bot") -> logging.Logger:
     )
     console_handler.setFormatter(console_format)
     logger.addHandler(console_handler)
-
-    # The Discord handler will be added after bot is ready
-    logger.discord_handler = None
 
     return logger
 
