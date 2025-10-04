@@ -17,6 +17,13 @@ class Config:
     VOICE_CATEGORY_ID = 1423888180712833125
     VOICE_JOIN_CHANNEL_ID = 1423888213105180712
 
+    # Music Bot Channel
+    MUSIC_CHANNEL_ID = 1423898796202659941
+
+    # Spotify Configuration (Optional)
+    SPOTIFY_CLIENT_ID = os.getenv('SPOTIFY_CLIENT_ID')
+    SPOTIFY_CLIENT_SECRET = os.getenv('SPOTIFY_CLIENT_SECRET')
+
     # Bot Settings
     COMMAND_PREFIX = '!'
 

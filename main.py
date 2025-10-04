@@ -22,7 +22,7 @@ class DiscordBot(commands.Bot):
         super().__init__(
             command_prefix=Config.COMMAND_PREFIX,
             intents=intents,
-            help_command=commands.DefaultHelpCommand()
+            help_command=None  # Disable default help for slash commands
         )
 
     async def setup_hook(self):
@@ -30,11 +30,22 @@ class DiscordBot(commands.Bot):
         logger.info("Setting up bot...")
 
         # Load cogs
+        cogs_to_load = ['cogs.voice', 'cogs.music']
+
+        for cog in cogs_to_load:
+            try:
+                await self.load_extension(cog)
+                logger.info(f"Loaded {cog}")
+            except Exception as e:
+                logger.error(f"Failed to load {cog}: {e}")
+
+        # Sync slash commands
         try:
-            await self.load_extension('cogs.voice')
-            logger.info("Loaded voice cog")
+            logger.info("Syncing slash commands...")
+            synced = await self.tree.sync()
+            logger.info(f"Synced {len(synced)} slash command(s)")
         except Exception as e:
-            logger.error(f"Failed to load voice cog: {e}")
+            logger.error(f"Failed to sync commands: {e}")
 
     async def on_ready(self):
         """Called when bot is ready"""
@@ -51,8 +62,8 @@ class DiscordBot(commands.Bot):
         # Set bot status
         await self.change_presence(
             activity=discord.Activity(
-                type=discord.ActivityType.watching,
-                name="voice channels"
+                type=discord.ActivityType.listening,
+                name="/play"
             )
         )
 
