@@ -348,6 +348,11 @@ class MusicCog(commands.Cog):
             'extract_flat': False,
             'default_search': 'ytsearch',
             'noplaylist': True,
+            'nocheckcertificate': True,
+            'ignoreerrors': False,
+            'logtostderr': False,
+            'no_color': True,
+            'source_address': '0.0.0.0',
         }
 
         try:
