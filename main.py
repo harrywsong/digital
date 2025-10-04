@@ -1,57 +1,98 @@
 import discord
 from discord.ext import commands
-import os
-from dotenv import load_dotenv
+import asyncio
+import logging
 from utils.config import Config
-from utils.logger import logger
+from utils.logger import setup_logger, add_discord_handler
 
-# Load environment variables
-load_dotenv()
-
-# Bot configuration
-intents = discord.Intents.default()
-intents.message_content = True
-intents.guilds = True
-intents.members = True
-intents.voice_states = True  # Required for voice channel events
-
-bot = commands.Bot(command_prefix=Config.PREFIX, intents=intents)
+# Setup logger
+logger = setup_logger()
 
 
-@bot.event
-async def on_ready():
-    logger.set_bot(bot)  # Initialize Discord logging
-    logger.info(f'{bot.user} has connected to Discord!')
-    logger.info(f'Bot is in {len(bot.guilds)} guilds')
+class DiscordBot(commands.Bot):
+    """Custom Discord Bot class"""
 
-    # Sync slash commands
-    try:
-        synced = await bot.tree.sync()
-        logger.info(f'Synced {len(synced)} command(s)')
-    except Exception as e:
-        logger.error(f'Failed to sync commands: {e}')
+    def __init__(self):
+        intents = discord.Intents.default()
+        intents.message_content = True
+        intents.voice_states = True
+        intents.guilds = True
+        intents.members = True
 
+        super().__init__(
+            command_prefix=Config.COMMAND_PREFIX,
+            intents=intents,
+            help_command=commands.DefaultHelpCommand()
+        )
 
-@bot.event
-async def on_guild_join(guild):
-    logger.info(f'Bot joined guild: {guild.name} (ID: {guild.id})')
+    async def setup_hook(self):
+        """Setup hook called when bot is starting"""
+        logger.info("Setting up bot...")
 
+        # Load cogs
+        try:
+            await self.load_extension('cogs.voice')
+            logger.info("Loaded voice cog")
+        except Exception as e:
+            logger.error(f"Failed to load voice cog: {e}")
 
-# Load cogs
-async def load_cogs():
-    for filename in os.listdir('./cogs'):
-        if filename.endswith('.py'):
-            await bot.load_extension(f'cogs.{filename[:-3]}')
-            logger.info(f'Loaded cog: {filename}')
+    async def on_ready(self):
+        """Called when bot is ready"""
+        logger.info(f'Bot is ready! Logged in as {self.user.name} (ID: {self.user.id})')
+        logger.info(f'Connected to {len(self.guilds)} guild(s)')
+
+        # Setup Discord log handler
+        try:
+            await add_discord_handler(logger, self, Config.LOG_CHANNEL_ID)
+            logger.info("Discord log handler initialized")
+        except Exception as e:
+            logger.error(f"Failed to setup Discord log handler: {e}")
+
+        # Set bot status
+        await self.change_presence(
+            activity=discord.Activity(
+                type=discord.ActivityType.watching,
+                name="voice channels"
+            )
+        )
+
+    async def on_command_error(self, ctx, error):
+        """Global error handler for commands"""
+        if isinstance(error, commands.CommandNotFound):
+            return
+        elif isinstance(error, commands.MissingPermissions):
+            await ctx.send("❌ You don't have permission to use this command.")
+        elif isinstance(error, commands.MissingRequiredArgument):
+            await ctx.send(f"❌ Missing required argument: {error.param.name}")
+        else:
+            logger.error(f"Command error in {ctx.command}: {error}")
+            await ctx.send("❌ An error occurred while executing the command.")
 
 
 async def main():
-    async with bot:
-        await load_cogs()
-        await bot.start(os.getenv('DISCORD_TOKEN'))
+    """Main function to run the bot"""
+
+    # Validate configuration
+    try:
+        Config.validate()
+    except ValueError as e:
+        logger.error(f"Configuration error: {e}")
+        return
+
+    # Create and run bot
+    bot = DiscordBot()
+
+    try:
+        async with bot:
+            await bot.start(Config.TOKEN)
+    except discord.LoginFailure:
+        logger.error("Invalid bot token provided")
+    except Exception as e:
+        logger.error(f"Fatal error: {e}")
 
 
-if __name__ == '__main__':
-    import asyncio
-
-    asyncio.run(main())
+if __name__ == "__main__":
+    try:
+        asyncio.run(main())
+    except KeyboardInterrupt:
+        logger.info("Bot shutdown requested")
