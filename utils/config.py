@@ -1,3 +1,4 @@
+import discord
 class Config:
     """Bot configuration settings"""
 
@@ -38,4 +39,3 @@ class Config:
     }
 
 
-import discord
